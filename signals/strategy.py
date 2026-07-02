@@ -1,10 +1,11 @@
 """
-Strategy signal generation: Buy and Sell rules.
+Strategy signal generation: Buy and Sell rules with optional trend filter.
 """
 
 import pandas as pd
 
-def buy_signal(df: pd.DataFrame, i: int) -> bool:
+
+def buy_signal(df: pd.DataFrame, i: int, use_trend: bool = True) -> bool:
     """
     Check if a BUY signal occurs at candle index i (after close).
 
@@ -12,28 +13,36 @@ def buy_signal(df: pd.DataFrame, i: int) -> bool:
     - Stochastic K[1] < 20 and K[0] > K[1]
     - ADX peaked: ADX[2] < ADX[1] and ADX[0] < ADX[1] and ADX[1] > 25
     - Heikin Ashi: both candle i-1 and i are bullish (HA_Bullish)
+    - Optional trend filter: close > EMA_200 (if column exists)
 
     Parameters
     ----------
     df : pd.DataFrame
         Data with required columns.
     i : int
-        Index of the current candle (signal candle).
+        Index of the signal candle.
+    use_trend : bool
+        If True, requires close > EMA_200 for BUY (when EMA_200 column present).
 
     Returns
     -------
     bool
     """
-    if i < 2:  # need at least 3 candles
+    if i < 2:
         return False
 
-    # Stochastic condition (use index i-1 and i)
+    # Trend filter (optional)
+    if use_trend and "EMA_200" in df.columns:
+        if df["close"].iloc[i] <= df["EMA_200"].iloc[i]:
+            return False
+
+    # Stochastic condition
     k_prev = df["Stoch_K"].iloc[i-1]
     k_curr = df["Stoch_K"].iloc[i]
     if not (k_prev < 20 and k_curr > k_prev):
         return False
 
-    # ADX condition (index i-2, i-1, i)
+    # ADX condition
     adx_2 = df["ADX"].iloc[i-2]
     adx_1 = df["ADX"].iloc[i-1]
     adx_0 = df["ADX"].iloc[i]
@@ -48,7 +57,8 @@ def buy_signal(df: pd.DataFrame, i: int) -> bool:
 
     return True
 
-def sell_signal(df: pd.DataFrame, i: int) -> bool:
+
+def sell_signal(df: pd.DataFrame, i: int, use_trend: bool = True) -> bool:
     """
     Check if a SELL signal occurs at candle index i.
 
@@ -56,11 +66,14 @@ def sell_signal(df: pd.DataFrame, i: int) -> bool:
     - Stochastic K[1] > 80 and K[0] < K[1]
     - ADX peaked: ADX[2] < ADX[1] and ADX[0] < ADX[1] and ADX[1] > 25
     - Heikin Ashi: both candle i-1 and i are bearish
+    - Optional trend filter: close < EMA_200 (if column exists)
 
     Parameters
     ----------
     df : pd.DataFrame
     i : int
+    use_trend : bool
+        If True, requires close < EMA_200 for SELL.
 
     Returns
     -------
@@ -68,6 +81,10 @@ def sell_signal(df: pd.DataFrame, i: int) -> bool:
     """
     if i < 2:
         return False
+
+    if use_trend and "EMA_200" in df.columns:
+        if df["close"].iloc[i] >= df["EMA_200"].iloc[i]:
+            return False
 
     k_prev = df["Stoch_K"].iloc[i-1]
     k_curr = df["Stoch_K"].iloc[i]

@@ -1,17 +1,18 @@
 """
-Swing Highs and Lows detection.
+Swing Highs and Lows detection with minimum distance constraint.
 """
 
 import pandas as pd
-import numpy as np
-from typing import Tuple, Optional
+from typing import Optional
 
-def detect_swings(df: pd.DataFrame, lookback: int = 3) -> pd.DataFrame:
+def detect_swings(df: pd.DataFrame, lookback: int = 3, min_distance: int = 5) -> pd.DataFrame:
     """
     Mark swing highs and lows.
 
-    A swing high occurs when High[i] is greater than the previous `lookback` highs.
-    A swing low occurs when Low[i] is lower than the previous `lookback` lows.
+    A swing high occurs when High[i] > previous `lookback` highs.
+    A swing low occurs when Low[i] < previous `lookback` lows.
+    Additionally, consecutive same-type swings must be separated by at least
+    `min_distance` bars.
 
     Parameters
     ----------
@@ -19,6 +20,8 @@ def detect_swings(df: pd.DataFrame, lookback: int = 3) -> pd.DataFrame:
         Must contain 'high' and 'low'.
     lookback : int
         Number of candles to the left to compare (default 3).
+    min_distance : int
+        Minimum number of bars between two swing highs (or two swing lows).
 
     Returns
     -------
@@ -28,16 +31,24 @@ def detect_swings(df: pd.DataFrame, lookback: int = 3) -> pd.DataFrame:
     df["SwingHigh"] = False
     df["SwingLow"] = False
 
-    for i in range(lookback, len(df)):
-        # Check swing high: high[i] > all previous lookback highs
-        if all(df["high"].iloc[i] > df["high"].iloc[i-j] for j in range(1, lookback+1)):
-            df.at[df.index[i], "SwingHigh"] = True
+    last_high_idx = -min_distance - 1
+    last_low_idx = -min_distance - 1
 
-        # Check swing low
+    for i in range(lookback, len(df)):
+        # Swing high check
+        if all(df["high"].iloc[i] > df["high"].iloc[i-j] for j in range(1, lookback+1)):
+            if i - last_high_idx >= min_distance:
+                df.at[df.index[i], "SwingHigh"] = True
+                last_high_idx = i
+
+        # Swing low check
         if all(df["low"].iloc[i] < df["low"].iloc[i-j] for j in range(1, lookback+1)):
-            df.at[df.index[i], "SwingLow"] = True
+            if i - last_low_idx >= min_distance:
+                df.at[df.index[i], "SwingLow"] = True
+                last_low_idx = i
 
     return df
+
 
 def last_swing_high(df: pd.DataFrame, before_index: int) -> Optional[float]:
     """
@@ -59,6 +70,7 @@ def last_swing_high(df: pd.DataFrame, before_index: int) -> Optional[float]:
     if mask.any():
         return df.loc[mask, "high"].iloc[-1]
     return None
+
 
 def last_swing_low(df: pd.DataFrame, before_index: int) -> Optional[float]:
     """

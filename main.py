@@ -13,10 +13,11 @@ from simulation.backtester import backtest
 from analytics.performance import compute_metrics, plot_equity_curve
 import config
 
+
 def main():
-    # Download 5000 5-min candles (~17 days)
+    # Download 10000 5-min candles (~35 days) to get enough trade samples
     print("Downloading data...")
-    df = download_data(limit=5000)
+    df = download_data(limit=10000)
 
     # Compute all indicators
     print("Computing Heikin Ashi...")
@@ -28,15 +29,24 @@ def main():
     print("ATR...")
     df = calculate_atr(df, config.ATR_PERIOD)
     print("Swing detection...")
-    df = detect_swings(df, config.SWING_LOOKBACK)
+    df = detect_swings(df, config.SWING_LOOKBACK)  # min_distance=5 default
+
+    # Add trend filter
+    print("EMA 200...")
+    df["EMA_200"] = df["close"].ewm(span=200, adjust=False).mean()
 
     # Drop NaN rows caused by indicator lookback
     df.dropna(inplace=True)
 
-    # Run backtest
+    # Run backtest with verbose output to see signals
     print("Running backtest...")
-    trades = backtest(df, initial_balance=10000, risk_per_trade=config.RISK_PER_TRADE,
-                      max_daily_losses=config.MAX_DAILY_LOSSES)
+    trades = backtest(
+        df,
+        initial_balance=10000,
+        risk_per_trade=config.RISK_PER_TRADE,
+        max_daily_losses=config.MAX_DAILY_LOSSES,
+        verbose=True
+    )
 
     if trades.empty:
         print("No trades generated.")
@@ -52,9 +62,10 @@ def main():
     # Plot equity and drawdown
     plot_equity_curve(metrics["equity_curve"], metrics["drawdown_curve"])
 
-    # Save trades to CSV
+    # Save trades to CSV (now includes duration_hours)
     trades.to_csv("trades_log.csv", index=False)
     print("\nTrades saved to trades_log.csv")
+
 
 if __name__ == "__main__":
     main()
